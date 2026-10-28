@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>C-AST Studio | Interactive C Language Lexer, Parser &amp; Visualizer</title>
-  <meta name="description" content="A high-performance C language compiler frontend with real-time Lexer, Pratt Parser, Interactive AST Graph, Symbol Table, and Control Flow Graph visualizer.">
-  <meta name="keywords" content="C parser, AST visualizer, C compiler, Pratt parser, lexer, control flow graph, symbol table, grammar analyzer">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>C-AST Studio | Interactive C Language Lexer, Parser, AST &amp; Output Console</title>
+  <meta name="description" content="A high-performance C compiler frontend and execution engine with real-time Lexer, Pratt Parser, Interactive AST Graph, Symbol Table, Control Flow Graph, and C Output Console.">
+  <meta name="keywords" content="C parser, AST visualizer, C interpreter, C compiler, Pratt parser, lexer, control flow graph, symbol table, grammar analyzer, C output">
   <meta name="author" content="Antigravity">
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2306b6d4'/><text x='50%' y='68%' font-size='60' font-weight='900' font-family='sans-serif' text-anchor='middle' fill='white'>C</text></svg>">
@@ -25,11 +25,11 @@
       <div class="brand-text">
         <h1>C-AST Studio</h1>
       </div>
-      <span class="brand-badge">C99 / C11 Parser</span>
+      <span class="brand-badge">C99 / C11</span>
     </div>
 
     <div class="header-controls">
-      <div class="control-item">
+      <div class="control-item sample-select-item">
         <label for="sample-select" class="control-label">Examples:</label>
         <select id="sample-select" class="select-input"></select>
       </div>
@@ -37,6 +37,11 @@
       <button id="btn-parse" class="btn-primary" title="Parse Source Code (Ctrl + Enter)">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         <span>Parse AST</span>
+      </button>
+
+      <button id="btn-run-code" class="btn-run" title="Execute C code &amp; show output">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+        <span>Run Code</span>
       </button>
 
       <button id="btn-format" class="btn-secondary" title="Auto Indent Code">
@@ -55,6 +60,26 @@
       </button>
     </div>
   </header>
+
+  <!-- Mobile View Switcher Tab Bar (Visible on mobile/tablets <= 900px) -->
+  <nav class="mobile-view-nav">
+    <button class="mobile-nav-btn active" data-view="editor">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <span>Editor</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="viewer">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M7 17l3.5-9M17 17l-3.5-9"/></svg>
+      <span>AST &amp; Tree</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="output">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      <span>Output</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="diagnostics">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Issues</span>
+    </button>
+  </nav>
 
   <!-- Metrics / Stats Bar -->
   <div class="metrics-bar">
@@ -80,20 +105,26 @@
       </div>
     </div>
     <div class="metrics-right">
-      <span class="control-label">Live AST Generation Enabled</span>
+      <span id="editor-dirty-indicator" class="dirty-indicator" style="display: none;">● Click Parse to refresh</span>
+      <label class="toggle-control" title="Enable auto-parsing as you type (off by default)">
+        <input type="checkbox" id="auto-parse-toggle">
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">Auto-Parse</span>
+      </label>
     </div>
   </div>
 
   <!-- Main Workspace -->
   <main class="app-workspace">
     <!-- Left Pane: Code Editor -->
-    <section class="editor-pane">
+    <section class="editor-pane active-mobile-view" id="section-editor">
       <div class="pane-header">
         <span class="pane-title">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
           C Source Code
         </span>
         <div class="pane-actions">
+          <button id="btn-quick-run" class="icon-btn-highlight" title="Run code">▶ Run</button>
           <button id="btn-clear" class="icon-btn" title="Clear editor">Clear</button>
         </div>
       </div>
@@ -101,12 +132,16 @@
     </section>
 
     <!-- Right Pane: Viewer & Visualizer -->
-    <section class="viewer-pane">
+    <section class="viewer-pane" id="section-viewer">
       <div class="viewer-tabs-header">
         <div class="view-tabs">
           <button class="view-tab active" data-tab="tab-ast">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M7 17l3.5-9M17 17l-3.5-9"/></svg>
             AST Visualizer
+          </button>
+          <button class="view-tab" data-tab="tab-output">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            Terminal Output
           </button>
           <button class="view-tab" data-tab="tab-tree">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
@@ -137,12 +172,38 @@
           <div id="visualizer-container" style="width: 100%; height: 100%;"></div>
         </div>
 
-        <!-- Tab 2: Outline Tree -->
+        <!-- Tab 2: Terminal Output Console -->
+        <div id="tab-output" class="tab-panel">
+          <div class="terminal-shell">
+            <div class="terminal-header">
+              <div class="terminal-controls">
+                <span class="term-dot dot-red"></span>
+                <span class="term-dot dot-yellow"></span>
+                <span class="term-dot dot-green"></span>
+              </div>
+              <div class="terminal-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                <span>C Program Execution Terminal</span>
+              </div>
+              <div class="terminal-actions">
+                <button id="btn-term-run" class="term-btn run" title="Run Program">▶ Run</button>
+                <button id="btn-term-clear" class="term-btn" title="Clear Output">Clear</button>
+              </div>
+            </div>
+            <div class="terminal-body" id="terminal-body">
+              <div class="term-line term-prompt">$ gcc -Wall -O2 main.c -o main &amp;&amp; ./main</div>
+              <div id="terminal-content" class="term-output">Click "▶ Run Code" above to execute this C program and view its standard output.</div>
+              <div id="terminal-status" class="term-status" style="display: none;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Outline Tree -->
         <div id="tab-tree" class="tab-panel">
           <div id="tree-view-content" class="outline-tree-wrapper"></div>
         </div>
 
-        <!-- Tab 3: Tokens Stream -->
+        <!-- Tab 4: Tokens Stream -->
         <div id="tab-tokens" class="tab-panel">
           <div class="table-toolbar">
             <input type="text" id="token-search" class="search-input" placeholder="Search tokens by lexeme or type...">
@@ -157,6 +218,7 @@
                 <option value="OPERATOR">Operators</option>
                 <option value="PUNCTUATOR">Punctuators</option>
                 <option value="PREPROCESSOR">Preprocessor</option>
+                <option value="COMMENT">Comments</option>
               </select>
             </div>
           </div>
@@ -177,7 +239,7 @@
           </div>
         </div>
 
-        <!-- Tab 4: Symbol Table -->
+        <!-- Tab 5: Symbol Table -->
         <div id="tab-symbols" class="tab-panel">
           <div class="table-scroll-container">
             <table class="data-table">
@@ -196,7 +258,7 @@
           </div>
         </div>
 
-        <!-- Tab 5: Control Flow Graph (CFG) -->
+        <!-- Tab 6: Control Flow Graph (CFG) -->
         <div id="tab-cfg" class="tab-panel">
           <div class="cfg-toolbar">
             <span class="control-label">Select Function:</span>
@@ -205,7 +267,7 @@
           <div id="cfg-visualizer-container" style="flex: 1; position: relative;"></div>
         </div>
 
-        <!-- Tab 6: Grammar Rules -->
+        <!-- Tab 7: Grammar Rules -->
         <div id="tab-grammar" class="tab-panel">
           <div id="grammar-traces-list" class="grammar-traces-container"></div>
         </div>
@@ -243,10 +305,16 @@
   </main>
 
   <!-- Bottom Diagnostics & Compiler Output -->
-  <footer class="diagnostics-panel-container">
+  <footer class="diagnostics-panel-container" id="section-diagnostics">
     <div class="diag-header-bar">
-      <span>COMPILER DIAGNOSTICS &amp; ERROR RECOVERY</span>
-      <span id="diag-count-badge" class="diag-count">0 issues</span>
+      <div class="diag-title-area">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>COMPILER DIAGNOSTICS &amp; ERROR RECOVERY</span>
+      </div>
+      <div class="diag-right-area">
+        <span id="diag-count-badge" class="diag-count">0 issues</span>
+        <button id="btn-toggle-diag" class="icon-btn" title="Toggle diagnostics panel">▼</button>
+      </div>
     </div>
     <div id="diagnostics-panel" class="diag-scroll"></div>
   </footer>

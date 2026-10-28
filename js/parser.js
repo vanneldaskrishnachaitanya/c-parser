@@ -8,7 +8,8 @@ import { AST, ASTNodeType } from './ast.js';
 
 export class Parser {
   constructor(tokens, source = '') {
-    this.tokens = tokens || [];
+    // Strip comments so they never interfere with parsing grammar
+    this.tokens = (tokens || []).filter(t => t.type !== TokenType.COMMENT);
     this.source = source;
     this.pos = 0;
     this.errors = [];

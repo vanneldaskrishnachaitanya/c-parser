@@ -416,7 +416,7 @@ export class Lexer {
     this.col += 2;
 
     if (isSingleLine) {
-      while (this.pos < this.source.length && this.source[this.pos] !== '\n') {
+      while (this.pos < this.source.length && this.source[this.pos] !== '\n' && this.source[this.pos] !== '\r') {
         this.pos++;
         this.col++;
       }

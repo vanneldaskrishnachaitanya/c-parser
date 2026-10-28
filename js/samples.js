@@ -118,6 +118,12 @@ int classify_score(int score) {
 
     return score;
 }
+
+int main() {
+    int final_score = classify_score(82);
+    printf("Adjusted Score: %d\n", final_score);
+    return 0;
+}
 `
   },
 

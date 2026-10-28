@@ -10,6 +10,7 @@ import { CFGBuilder } from './cfg.js';
 import { TreeVisualizer } from './tree-visualizer.js';
 import { CodeEditor } from './editor.js';
 import { C_SAMPLES } from './samples.js';
+import { CInterpreter } from './interpreter.js';
 
 class App {
   constructor() {
@@ -19,12 +20,15 @@ class App {
     this.currentSymbols = null;
     this.parseTimer = null;
     this.activeTab = 'tab-ast';
+    this.autoParse = false; // Disabled by default per user request
+    this.isDirty = false;
+    this.mobileView = 'editor';
 
     this.initUI();
     this.initComponents();
     this.bindEvents();
 
-    // Load initial sample
+    // Load initial sample and parse once
     this.loadSample('fibonacci');
   }
 
@@ -61,6 +65,49 @@ class App {
       this.runPipeline();
     });
 
+    // Run Code button in header
+    document.getElementById('btn-run-code').addEventListener('click', () => {
+      this.runCode();
+    });
+
+    // Quick Run button in editor pane
+    const quickRunBtn = document.getElementById('btn-quick-run');
+    if (quickRunBtn) {
+      quickRunBtn.addEventListener('click', () => {
+        this.runCode();
+      });
+    }
+
+    // Terminal Run button
+    const termRunBtn = document.getElementById('btn-term-run');
+    if (termRunBtn) {
+      termRunBtn.addEventListener('click', () => {
+        this.runCode();
+      });
+    }
+
+    // Terminal Clear button
+    const termClearBtn = document.getElementById('btn-term-clear');
+    if (termClearBtn) {
+      termClearBtn.addEventListener('click', () => {
+        document.getElementById('terminal-content').textContent = '';
+        document.getElementById('terminal-status').style.display = 'none';
+      });
+    }
+
+    // Auto-parse toggle switch
+    const autoParseToggle = document.getElementById('auto-parse-toggle');
+    if (autoParseToggle) {
+      autoParseToggle.checked = this.autoParse;
+      autoParseToggle.addEventListener('change', (e) => {
+        this.autoParse = e.target.checked;
+        if (this.autoParse && this.isDirty) {
+          this.runPipeline();
+        }
+        this.showToast(this.autoParse ? 'Auto-Parse enabled' : 'Auto-Parse disabled (manual parse only)');
+      });
+    }
+
     // Format / clean code button
     document.getElementById('btn-format').addEventListener('click', () => {
       this.formatCode();
@@ -85,7 +132,7 @@ class App {
       this.exportSVG();
     });
 
-    // Tab switching
+    // Tab switching in viewer pane
     document.querySelectorAll('.view-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         const target = tab.getAttribute('data-tab');
@@ -93,11 +140,33 @@ class App {
       });
     });
 
-    // Keyboard shortcut (Ctrl+Enter to parse)
+    // Mobile Navigation Switcher
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const view = btn.getAttribute('data-view');
+        this.switchMobileView(view);
+      });
+    });
+
+    // Toggle diagnostics panel
+    const toggleDiagBtn = document.getElementById('btn-toggle-diag');
+    if (toggleDiagBtn) {
+      toggleDiagBtn.addEventListener('click', () => {
+        const panel = document.getElementById('section-diagnostics');
+        panel.classList.toggle('collapsed');
+        toggleDiagBtn.textContent = panel.classList.contains('collapsed') ? '▲' : '▼';
+      });
+    }
+
+    // Keyboard shortcut (Ctrl+Enter to parse, Ctrl+Shift+Enter to run)
     window.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        this.runPipeline();
+        if (e.shiftKey) {
+          this.runCode();
+        } else {
+          this.runPipeline();
+        }
       }
     });
 
@@ -132,26 +201,43 @@ class App {
     const sample = C_SAMPLES[sampleKey];
     if (!sample) return;
     this.editor.setValue(sample.code);
+    this.isDirty = false;
+    this.updateDirtyIndicator();
     this.runPipeline();
   }
 
   handleCodeChange() {
-    clearTimeout(this.parseTimer);
-    this.parseTimer = setTimeout(() => {
-      this.runPipeline();
-    }, 280);
+    this.isDirty = true;
+    this.updateDirtyIndicator();
+
+    if (this.autoParse) {
+      clearTimeout(this.parseTimer);
+      this.parseTimer = setTimeout(() => {
+        this.runPipeline();
+      }, 500);
+    }
+  }
+
+  updateDirtyIndicator() {
+    const indicator = document.getElementById('editor-dirty-indicator');
+    if (indicator) {
+      indicator.style.display = (this.isDirty && !this.autoParse) ? 'inline-flex' : 'none';
+    }
   }
 
   runPipeline() {
+    this.isDirty = false;
+    this.updateDirtyIndicator();
+
     const code = this.editor.getValue();
     const t0 = performance.now();
 
-    // 1. Lexical Analysis
+    // 1. Lexical Analysis (captures all tokens including comments)
     const lexer = new Lexer(code, { includeComments: true });
     const lexResult = lexer.tokenize();
     this.currentTokens = lexResult.tokens;
 
-    // 2. Syntactic Analysis (Parsing)
+    // 2. Syntactic Analysis (Parser automatically ignores comments)
     const parser = new Parser(lexResult.tokens, code);
     const parseResult = parser.parse();
     this.currentAST = parseResult.ast;
@@ -159,7 +245,7 @@ class App {
     const t1 = performance.now();
     const parseTimeMs = (t1 - t0).toFixed(2);
 
-    // Merge errors
+    // Filter out comment tokens from any error detection
     const allErrors = [...lexResult.errors, ...parseResult.errors];
 
     // 3. Semantic Analysis (Symbol Table)
@@ -187,6 +273,57 @@ class App {
 
     // Update Active View
     this.updateActiveTabContent(parseResult.grammarTraces);
+  }
+
+  runCode() {
+    // Ensure pipeline is up to date
+    this.runPipeline();
+
+    // Switch to Output Tab
+    this.switchTab('tab-output');
+
+    // On mobile, switch to Output view
+    if (window.innerWidth <= 900) {
+      this.switchMobileView('output');
+    }
+
+    const termContent = document.getElementById('terminal-content');
+    const termStatus = document.getElementById('terminal-status');
+
+    termContent.innerHTML = '<span class="term-dim">Compiling and running C code in virtual sandbox...</span>';
+    termStatus.style.display = 'none';
+
+    setTimeout(() => {
+      const interpreter = new CInterpreter(this.currentAST);
+      const res = interpreter.run();
+
+      if (res.success) {
+        const out = res.output || '<No output printed to stdout>';
+        termContent.innerHTML = this.escape(out);
+
+        termStatus.className = 'term-status success';
+        termStatus.style.display = 'block';
+        termStatus.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Process completed with exit code <strong>${res.exitCode}</strong> in <strong>${res.executionTimeMs} ms</strong>
+        `;
+      } else {
+        termContent.innerHTML = `<span class="term-error">Runtime Error: ${this.escape(res.error)}</span>\n${this.escape(res.output)}`;
+
+        termStatus.className = 'term-status error';
+        termStatus.style.display = 'block';
+        termStatus.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          Process terminated with error in <strong>${res.executionTimeMs} ms</strong>
+        `;
+      }
+
+      // Scroll terminal to bottom
+      const termBody = document.getElementById('terminal-body');
+      if (termBody) {
+        termBody.scrollTop = termBody.scrollHeight;
+      }
+    }, 40);
   }
 
   updateStats(stats) {
@@ -231,6 +368,41 @@ class App {
     this.updateActiveTabContent();
   }
 
+  switchMobileView(viewName) {
+    this.mobileView = viewName;
+
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-view') === viewName);
+    });
+
+    const editorSection = document.getElementById('section-editor');
+    const viewerSection = document.getElementById('section-viewer');
+    const diagSection = document.getElementById('section-diagnostics');
+
+    if (viewName === 'editor') {
+      editorSection.style.display = 'flex';
+      viewerSection.style.display = 'none';
+      diagSection.style.display = 'none';
+    } else if (viewName === 'viewer') {
+      editorSection.style.display = 'none';
+      viewerSection.style.display = 'flex';
+      diagSection.style.display = 'none';
+      if (this.activeTab === 'tab-output') {
+        this.switchTab('tab-ast');
+      }
+    } else if (viewName === 'output') {
+      editorSection.style.display = 'none';
+      viewerSection.style.display = 'flex';
+      diagSection.style.display = 'none';
+      this.switchTab('tab-output');
+    } else if (viewName === 'diagnostics') {
+      editorSection.style.display = 'none';
+      viewerSection.style.display = 'none';
+      diagSection.style.display = 'flex';
+      diagSection.classList.remove('collapsed');
+    }
+  }
+
   updateActiveTabContent(grammarTraces = []) {
     switch (this.activeTab) {
       case 'tab-ast':
@@ -256,6 +428,10 @@ class App {
       case 'tab-grammar':
         this.renderGrammarRules(grammarTraces);
         break;
+
+      case 'tab-output':
+        // Output tab active
+        break;
     }
   }
 
@@ -271,7 +447,6 @@ class App {
 
     container.innerHTML = this.buildOutlineTreeHTML(this.currentAST);
 
-    // Attach tree toggle listeners
     container.querySelectorAll('.tree-node-header').forEach(header => {
       header.addEventListener('click', (e) => {
         const row = header.closest('.tree-node-row');
@@ -359,6 +534,9 @@ class App {
         const start = parseInt(row.getAttribute('data-start'), 10);
         const end = parseInt(row.getAttribute('data-end'), 10);
         this.editor.highlightRange(start, end);
+        if (window.innerWidth <= 900) {
+          this.switchMobileView('editor');
+        }
       });
     });
   }
@@ -395,6 +573,9 @@ class App {
         }
         const lineLen = lines[line - 1]?.length || 0;
         this.editor.highlightRange(charPos, charPos + lineLen);
+        if (window.innerWidth <= 900) {
+          this.switchMobileView('editor');
+        }
       });
     });
   }
@@ -514,13 +695,15 @@ class App {
 
     panel.innerHTML = html;
 
-    // Click diagnostic to jump
     panel.querySelectorAll('.diag-item').forEach(item => {
       item.addEventListener('click', () => {
         const start = parseInt(item.getAttribute('data-start'), 10);
         const end = parseInt(item.getAttribute('data-end'), 10);
         if (!isNaN(start) && !isNaN(end)) {
           this.editor.highlightRange(start, Math.max(start + 1, end));
+          if (window.innerWidth <= 900) {
+            this.switchMobileView('editor');
+          }
         }
       });
     });
@@ -538,7 +721,6 @@ class App {
     document.getElementById('inspect-node-id').textContent = node.id;
     document.getElementById('inspect-node-loc').textContent = `Ln ${node.loc?.line || 1}:${node.loc?.col || 1} (Offset ${node.loc?.start || 0}..${node.loc?.end || 0})`;
 
-    // Props table
     const propsList = document.getElementById('inspect-props-list');
     let propsHtml = '';
     for (const [key, val] of Object.entries(node)) {
@@ -553,10 +735,8 @@ class App {
     }
     propsList.innerHTML = propsHtml || '<div class="empty-state">No direct scalar attributes</div>';
 
-    // JSON snippet
     document.getElementById('inspect-json-code').textContent = JSON.stringify(node, (k, v) => (k === '_width' ? undefined : v), 2);
 
-    // Jump to code in editor
     if (node.loc && node.loc.start !== undefined && node.loc.end !== undefined) {
       this.editor.highlightRange(node.loc.start, node.loc.end);
     }
@@ -573,7 +753,6 @@ class App {
   }
 
   formatCode() {
-    // Basic automatic C formatter: ensures proper indentation
     const code = this.editor.getValue();
     const lines = code.split('\n');
     let indent = 0;
@@ -592,7 +771,7 @@ class App {
 
     this.editor.setValue(formatted);
     this.runPipeline();
-    this.showToast('Code indentation cleaned!');
+    this.showToast('Code formatted with 4-space indentation!');
   }
 
   exportSVG() {
@@ -601,7 +780,6 @@ class App {
     const serializer = new XMLSerializer();
     let source = serializer.serializeToString(svgEl);
 
-    // Add XML declaration
     if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
       source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
     }
