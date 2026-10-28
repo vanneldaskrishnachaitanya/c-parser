@@ -1,0 +1,13 @@
+{
+  "name": "c-parser-studio",
+  "version": "1.0.0",
+  "description": "Interactive C Language Lexer, Parser, AST & Control Flow Visualizer",
+  "type": "module",
+  "scripts": {
+    "dev": "serve -l 5173 -n .",
+    "start": "serve -l 5173 -n ."
+  },
+  "keywords": ["c-parser", "ast", "compiler", "lexer", "cfg", "visualization"],
+  "author": "Antigravity",
+  "license": "MIT"
+}
