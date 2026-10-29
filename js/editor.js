@@ -41,6 +41,7 @@ export class CodeEditor {
     `;
 
     this.textarea = this.container.querySelector('#editor-input');
+    this.highlightPre = this.container.querySelector('#highlight-layer');
     this.highlightLayer = this.container.querySelector('#highlight-layer code');
     this.lineNumbers = this.container.querySelector('#line-numbers');
     this.activeMarker = this.container.querySelector('#active-line-marker');
@@ -61,11 +62,14 @@ export class CodeEditor {
       this.onCodeChange(this.textarea.value);
     });
 
-    // Scroll synchronization
+    // Scroll synchronization — sync highlight layer via transform (content-area is overflow:hidden)
     this.textarea.addEventListener('scroll', () => {
-      this.highlightLayer.parentElement.scrollTop = this.textarea.scrollTop;
-      this.highlightLayer.parentElement.scrollLeft = this.textarea.scrollLeft;
-      this.lineNumbers.parentElement.scrollTop = this.textarea.scrollTop;
+      const st = this.textarea.scrollTop;
+      const sl = this.textarea.scrollLeft;
+      // Shift highlight layer to match textarea scroll position
+      this.highlightPre.style.transform = `translate(${-sl}px, ${-st}px)`;
+      // Sync gutter line numbers
+      this.lineNumbers.style.transform = `translateY(${-st}px)`;
       this.updateActiveLine();
     });
 
@@ -141,8 +145,11 @@ export class CodeEditor {
     const val = this.textarea.value;
     const pos = this.textarea.selectionStart;
     const lineIndex = val.substring(0, pos).split('\n').length - 1;
-    const lineHeight = 21; // Matches CSS line-height
-    const topPos = lineIndex * lineHeight - this.textarea.scrollTop;
+    // Read the actual computed line-height so it never drifts from CSS
+    const lineHeight = parseFloat(getComputedStyle(this.textarea).lineHeight) || 21;
+    // padding-top must be added so the marker aligns with the first line correctly
+    const paddingTop = parseFloat(getComputedStyle(this.textarea).paddingTop) || 10;
+    const topPos = paddingTop + lineIndex * lineHeight - this.textarea.scrollTop;
     this.activeMarker.style.top = `${topPos}px`;
   }
 

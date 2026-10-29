@@ -517,11 +517,18 @@ body {
   border-right: 1px solid var(--border-subtle);
   user-select: none;
   overflow: hidden;
-  padding: 10px 0;
+  padding: 0;
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 21px;
+}
+
+/* Line-numbers block: padding-top matches textarea padding-top (10px).
+   JS scroll sync uses translateY() on this element. */
+.line-numbers {
+  padding-top: 10px;
+  will-change: transform;
 }
 
 .gutter-line {
@@ -553,8 +560,9 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  /* Wider than the container so long lines don't wrap and scroll correctly */
+  min-width: 100%;
+  min-height: 100%;
   margin: 0;
   padding: 10px 14px;
   font-family: var(--font-mono);
@@ -563,8 +571,10 @@ body {
   white-space: pre;
   tab-size: 4;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
   color: var(--text-code);
+  will-change: transform;
+  /* transform is driven by JS scroll sync */
 }
 
 .editor-textarea {
@@ -597,7 +607,7 @@ body {
   background: rgba(255, 255, 255, 0.035);
   pointer-events: none;
   border-left: 2px solid var(--accent-cyan);
-  transition: top 0.08s ease;
+  /* No transition — instant tracking prevents cursor glitch */
   z-index: 1;
 }
 
