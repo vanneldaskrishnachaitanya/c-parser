@@ -269,7 +269,36 @@
 
         <!-- Tab 7: Grammar Rules -->
         <div id="tab-grammar" class="tab-panel">
-          <div id="grammar-traces-list" class="grammar-traces-container"></div>
+          <div class="grammar-toolbar">
+            <div class="grammar-toolbar-left">
+              <input type="text" id="grammar-search" class="search-input" placeholder="Search grammar rules or BNF...">
+              <div class="control-item">
+                <label for="grammar-category-filter" class="control-label">Category:</label>
+                <select id="grammar-category-filter" class="select-input">
+                  <option value="ALL">All Categories</option>
+                  <option value="Program Structure">Program Structure</option>
+                  <option value="Declarations">Declarations</option>
+                  <option value="Statements">Statements</option>
+                  <option value="Expressions">Expressions</option>
+                  <option value="Preprocessor">Preprocessor</option>
+                </select>
+              </div>
+            </div>
+            <div class="grammar-toolbar-right">
+              <div class="grammar-view-toggle">
+                <button id="btn-grammar-traces" class="grammar-toggle-btn active" title="Show rules matched in your C code">
+                  Active Traces (<span id="grammar-traces-count">0</span>)
+                </button>
+                <button id="btn-grammar-reference" class="grammar-toggle-btn" title="View standard ANSI C BNF Grammar catalog">
+                  BNF Reference
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="grammar-scroll-container">
+            <div id="grammar-traces-list" class="grammar-traces-container"></div>
+            <div id="grammar-reference-list" class="grammar-traces-container" style="display: none;"></div>
+          </div>
         </div>
       </div>
 

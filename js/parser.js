@@ -20,11 +20,14 @@ export class Parser {
   }
 
   traceGrammar(rule, info = '') {
+    const tok = this.peek();
     this.grammarTraces.push({
       rule,
       info,
-      line: this.peek()?.line || 1,
-      col: this.peek()?.col || 1
+      line: tok?.line || 1,
+      col: tok?.col || 1,
+      start: tok?.start || 0,
+      end: tok?.end || 0
     });
   }
 
@@ -771,6 +774,7 @@ export class Parser {
     this.enterNode();
     const startTok = this.peek();
     const expr = this.parseExpression();
+    this.traceGrammar('expression-statement', expr.callee?.name || expr.operator || '');
     this.consume(TokenType.PUNCTUATOR, ';', "Expected ';' after expression");
     this.exitNode();
     return AST.expressionStatement(expr, {
@@ -1066,6 +1070,7 @@ export class Parser {
     while (true) {
       // Function call: f(...)
       if (this.match(TokenType.PUNCTUATOR, '(')) {
+        this.traceGrammar('call-expression', expr.name || 'call');
         const args = [];
         if (!this.check(TokenType.PUNCTUATOR, ')')) {
           do {
@@ -1082,6 +1087,7 @@ export class Parser {
       }
       // Array subscript: a[i]
       else if (this.match(TokenType.PUNCTUATOR, '[')) {
+        this.traceGrammar('subscript-expression', '[');
         const index = this.parseExpression();
         this.consume(TokenType.PUNCTUATOR, ']', "Expected ']' after array index");
         expr = AST.subscriptExpression(expr, index, {
@@ -1100,6 +1106,7 @@ export class Parser {
           break;
         }
         const member = this.advance().value;
+        this.traceGrammar('member-expression', `${isArrow ? '->' : '.'}${member}`);
         expr = AST.memberExpression(expr, member, isArrow, {
           line: expr.loc.line,
           col: expr.loc.col,

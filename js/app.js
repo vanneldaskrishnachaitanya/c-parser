@@ -11,6 +11,7 @@ import { TreeVisualizer } from './tree-visualizer.js';
 import { CodeEditor } from './editor.js';
 import { C_SAMPLES } from './samples.js';
 import { CInterpreter } from './interpreter.js';
+import { C_GRAMMAR_CATALOG } from './grammar.js';
 
 class App {
   constructor() {
@@ -18,6 +19,8 @@ class App {
     this.currentTokens = [];
     this.currentCFG = null;
     this.currentSymbols = null;
+    this.currentGrammarTraces = [];
+    this.grammarViewMode = 'traces';
     this.parseTimer = null;
     this.activeTab = 'tab-ast';
     this.autoParse = false; // Disabled by default per user request
@@ -195,6 +198,44 @@ class App {
         this.filterTokens(tokenFilterInput.value);
       });
     }
+
+    // Grammar view mode toggle buttons
+    const btnGrammarTraces = document.getElementById('btn-grammar-traces');
+    const btnGrammarRef = document.getElementById('btn-grammar-reference');
+    if (btnGrammarTraces && btnGrammarRef) {
+      btnGrammarTraces.addEventListener('click', () => {
+        this.grammarViewMode = 'traces';
+        btnGrammarTraces.classList.add('active');
+        btnGrammarRef.classList.remove('active');
+        document.getElementById('grammar-traces-list').style.display = 'flex';
+        document.getElementById('grammar-reference-list').style.display = 'none';
+        this.updateGrammarView();
+      });
+
+      btnGrammarRef.addEventListener('click', () => {
+        this.grammarViewMode = 'reference';
+        btnGrammarRef.classList.add('active');
+        btnGrammarTraces.classList.remove('active');
+        document.getElementById('grammar-traces-list').style.display = 'none';
+        document.getElementById('grammar-reference-list').style.display = 'flex';
+        this.updateGrammarView();
+      });
+    }
+
+    // Grammar search and category filter
+    const grammarSearch = document.getElementById('grammar-search');
+    if (grammarSearch) {
+      grammarSearch.addEventListener('input', () => {
+        this.updateGrammarView();
+      });
+    }
+
+    const grammarCatFilter = document.getElementById('grammar-category-filter');
+    if (grammarCatFilter) {
+      grammarCatFilter.addEventListener('change', () => {
+        this.updateGrammarView();
+      });
+    }
   }
 
   loadSample(sampleKey) {
@@ -271,8 +312,15 @@ class App {
     // Update Diagnostics Panel
     this.renderDiagnostics(allErrors, this.currentSymbols.warnings);
 
+    // Store grammar traces
+    this.currentGrammarTraces = parseResult.grammarTraces || [];
+    const tracesCountBadge = document.getElementById('grammar-traces-count');
+    if (tracesCountBadge) {
+      tracesCountBadge.textContent = this.currentGrammarTraces.length;
+    }
+
     // Update Active View
-    this.updateActiveTabContent(parseResult.grammarTraces);
+    this.updateActiveTabContent();
   }
 
   runCode() {
@@ -426,7 +474,7 @@ class App {
         break;
 
       case 'tab-grammar':
-        this.renderGrammarRules(grammarTraces);
+        this.updateGrammarView();
         break;
 
       case 'tab-output':
@@ -625,25 +673,124 @@ class App {
   }
 
   // ==========================================
-  // Grammar Rules
+  // Grammar Rules & BNF Explorer
   // ==========================================
-  renderGrammarRules(traces = []) {
+  updateGrammarView() {
+    if (this.grammarViewMode === 'reference') {
+      this.renderGrammarReference();
+    } else {
+      this.renderGrammarTraces();
+    }
+  }
+
+  renderGrammarTraces() {
     const container = document.getElementById('grammar-traces-list');
-    if (!traces || traces.length === 0) {
-      container.innerHTML = '<div class="empty-state">No grammar traces recorded</div>';
+    if (!container) return;
+
+    const traces = this.currentGrammarTraces || [];
+    const countBadge = document.getElementById('grammar-traces-count');
+    if (countBadge) countBadge.textContent = traces.length;
+
+    if (traces.length === 0) {
+      container.innerHTML = '<div class="empty-state">No grammar traces recorded. Click "Parse AST" or load an example to trace rules.</div>';
       return;
     }
 
-    container.innerHTML = traces.slice(0, 50).map((t, idx) => `
-      <div class="grammar-rule-card">
-        <span class="grammar-idx">#${idx + 1}</span>
-        <div class="grammar-body">
-          <span class="grammar-name">&lt;${t.rule}&gt;</span>
-          ${t.info ? `<span class="grammar-info">${this.escape(t.info)}</span>` : ''}
+    const searchQuery = (document.getElementById('grammar-search')?.value || '').toLowerCase().trim();
+    const categoryFilter = document.getElementById('grammar-category-filter')?.value || 'ALL';
+
+    const filtered = traces.filter(t => {
+      const meta = C_GRAMMAR_CATALOG[t.rule];
+      const cat = meta?.category || 'Syntax';
+      if (categoryFilter !== 'ALL' && cat !== categoryFilter) return false;
+      if (searchQuery) {
+        const matchesRule = t.rule.toLowerCase().includes(searchQuery);
+        const matchesInfo = (t.info || '').toLowerCase().includes(searchQuery);
+        const matchesBnf = (meta?.bnf || '').toLowerCase().includes(searchQuery);
+        const matchesDesc = (meta?.description || '').toLowerCase().includes(searchQuery);
+        if (!matchesRule && !matchesInfo && !matchesBnf && !matchesDesc) return false;
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state">No matching grammar traces found for current search/filter.</div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map((t, idx) => {
+      const meta = C_GRAMMAR_CATALOG[t.rule];
+      const cat = meta?.category || 'Syntax';
+      const catClass = cat.toLowerCase().replace(/\s+/g, '-');
+      const bnf = meta?.bnf || `<${t.rule}>`;
+      const desc = meta?.description || '';
+
+      return `
+        <div class="grammar-rule-card" data-start="${t.start || 0}" data-end="${t.end || 0}" title="Click to focus in editor">
+          <div class="grammar-card-top">
+            <span class="grammar-idx">#${idx + 1}</span>
+            <span class="grammar-name">&lt;${this.escape(t.rule)}&gt;</span>
+            <span class="grammar-cat-tag ${catClass}">${cat}</span>
+            ${t.info ? `<span class="grammar-info">${this.escape(t.info)}</span>` : ''}
+            <span class="grammar-loc">Line ${t.line}:${t.col}</span>
+          </div>
+          <div class="grammar-bnf-block"><code>${this.escape(bnf)}</code></div>
+          ${desc ? `<div class="grammar-desc">${this.escape(desc)}</div>` : ''}
         </div>
-        <span class="grammar-loc">Ln ${t.line}:${t.col}</span>
-      </div>
-    `).join('');
+      `;
+    }).join('');
+
+    container.querySelectorAll('.grammar-rule-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const start = parseInt(card.getAttribute('data-start'), 10);
+        const end = parseInt(card.getAttribute('data-end'), 10);
+        if (!isNaN(start) && !isNaN(end) && end > start) {
+          this.editor.highlightRange(start, end);
+          if (window.innerWidth <= 900) {
+            this.switchMobileView('editor');
+          }
+        }
+      });
+    });
+  }
+
+  renderGrammarReference() {
+    const container = document.getElementById('grammar-reference-list');
+    if (!container) return;
+
+    const searchQuery = (document.getElementById('grammar-search')?.value || '').toLowerCase().trim();
+    const categoryFilter = document.getElementById('grammar-category-filter')?.value || 'ALL';
+
+    const entries = Object.entries(C_GRAMMAR_CATALOG).filter(([key, meta]) => {
+      if (categoryFilter !== 'ALL' && meta.category !== categoryFilter) return false;
+      if (searchQuery) {
+        const matchesKey = key.toLowerCase().includes(searchQuery);
+        const matchesBnf = meta.bnf.toLowerCase().includes(searchQuery);
+        const matchesDesc = meta.description.toLowerCase().includes(searchQuery);
+        if (!matchesKey && !matchesBnf && !matchesDesc) return false;
+      }
+      return true;
+    });
+
+    if (entries.length === 0) {
+      container.innerHTML = '<div class="empty-state">No matching BNF rules found in reference catalog.</div>';
+      return;
+    }
+
+    container.innerHTML = entries.map(([key, meta], idx) => {
+      const catClass = meta.category.toLowerCase().replace(/\s+/g, '-');
+      return `
+        <div class="grammar-rule-card">
+          <div class="grammar-card-top">
+            <span class="grammar-idx">#${idx + 1}</span>
+            <span class="grammar-name">&lt;${this.escape(meta.name)}&gt;</span>
+            <span class="grammar-cat-tag ${catClass}">${meta.category}</span>
+          </div>
+          <div class="grammar-bnf-block"><code>${this.escape(meta.bnf)}</code></div>
+          <div class="grammar-desc">${this.escape(meta.description)}</div>
+        </div>
+      `;
+    }).join('');
   }
 
   // ==========================================
